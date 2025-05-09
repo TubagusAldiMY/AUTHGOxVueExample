@@ -1,65 +1,64 @@
 // internal/storage/postgres.go
-package storage // <- Ubah package
+package storage
 
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
 
 	_ "github.com/jackc/pgx/v5/stdlib" // Import driver pgx
 )
 
-var DB *sql.DB // Variabel global untuk koneksi database (sementara)
-
-// ConnectDB menginisialisasi koneksi ke database PostgreSQL
-func ConnectDB() {
+// ConnectDB menginisialisasi dan mengembalikan koneksi ke database PostgreSQL
+func ConnectDB() (*sql.DB, error) {
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		log.Fatal("DATABASE_URL environment variable is required")
+		return nil, fmt.Errorf("DATABASE_URL environment variable is required")
 	}
 
-	var err error
-	DB, err = sql.Open("pgx", dbURL)
+	db, err := sql.Open("pgx", dbURL)
 	if err != nil {
-		log.Fatalf("Unable to connect to database: %v\n", err)
+		return nil, fmt.Errorf("unable to open database connection: %w", err)
 	}
 
 	// Cek koneksi
-	err = DB.Ping()
+	err = db.Ping()
 	if err != nil {
-		DB.Close() // Tutup koneksi jika ping gagal
-		log.Fatalf("Unable to ping database: %v\n", err)
+		db.Close() // Tutup koneksi jika ping gagal
+		return nil, fmt.Errorf("unable to ping database: %w", err)
 	}
 
 	fmt.Println("Successfully connected to database!")
-
-	// (Opsional) Anda bisa membuat tabel di sini jika belum ada
-	// createTableIfNotExists()
+	return db, nil
 }
 
-// (Opsional) Fungsi untuk membuat tabel jika belum ada
-func CreateTableIfNotExists() {
+// CreateTableIfNotExists membuat tabel users jika belum ada
+func CreateTableIfNotExists(db *sql.DB) error {
 	createTableSQL := `
-	CREATE TABLE IF NOT EXISTS users (
-		id SERIAL PRIMARY KEY,
-		username VARCHAR(50) UNIQUE NOT NULL,
-		email VARCHAR(255) UNIQUE NOT NULL,
-		password_hash VARCHAR(255) NOT NULL,
-		created_at TIMESTAMPTZ DEFAULT NOW()
-	);`
+    CREATE TABLE IF NOT EXISTS users (
+       id SERIAL PRIMARY KEY,
+       username VARCHAR(50) UNIQUE NOT NULL,
+       email VARCHAR(255) UNIQUE NOT NULL,
+       password_hash VARCHAR(255) NOT NULL,
+       created_at TIMESTAMPTZ DEFAULT NOW()
+    );`
 
-	_, err := DB.Exec(createTableSQL)
+	_, err := db.Exec(createTableSQL)
 	if err != nil {
-		log.Fatalf("Unable to create users table: %v\n", err)
+		return fmt.Errorf("unable to create users table: %w", err)
 	}
 	fmt.Println("Users table checked/created successfully.")
+	return nil
 }
 
 // CloseDB menutup koneksi database
-func CloseDB() {
-	if DB != nil {
-		DB.Close()
+func CloseDB(db *sql.DB) error {
+	if db != nil {
+		err := db.Close()
+		if err != nil {
+			return fmt.Errorf("error closing database connection: %w", err)
+		}
 		fmt.Println("Database connection closed.")
 	}
+	return nil
 }
