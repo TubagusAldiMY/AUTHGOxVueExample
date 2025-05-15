@@ -10,7 +10,7 @@ import (
 )
 
 // ConnectDB menginisialisasi dan mengembalikan koneksi ke database PostgreSQL
-func ConnectDB() (*sql.DB, error) {
+func ConnectDB() (*sql.DB, error) { // Sudah benar, mengembalikan *sql.DB dan error
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
 		return nil, fmt.Errorf("DATABASE_URL environment variable is required")
@@ -21,10 +21,9 @@ func ConnectDB() (*sql.DB, error) {
 		return nil, fmt.Errorf("unable to open database connection: %w", err)
 	}
 
-	// Cek koneksi
 	err = db.Ping()
 	if err != nil {
-		db.Close() // Tutup koneksi jika ping gagal
+		db.Close()
 		return nil, fmt.Errorf("unable to ping database: %w", err)
 	}
 
@@ -33,7 +32,7 @@ func ConnectDB() (*sql.DB, error) {
 }
 
 // CreateTableIfNotExists membuat tabel users jika belum ada
-func CreateTableIfNotExists(db *sql.DB) error {
+func CreateTableIfNotExists(db *sql.DB) error { // Sudah benar, menerima *sql.DB
 	createTableSQL := `
     CREATE TABLE IF NOT EXISTS users (
        id SERIAL PRIMARY KEY,
@@ -52,7 +51,7 @@ func CreateTableIfNotExists(db *sql.DB) error {
 }
 
 // CloseDB menutup koneksi database
-func CloseDB(db *sql.DB) error {
+func CloseDB(db *sql.DB) error { // Sudah benar, menerima *sql.DB
 	if db != nil {
 		err := db.Close()
 		if err != nil {

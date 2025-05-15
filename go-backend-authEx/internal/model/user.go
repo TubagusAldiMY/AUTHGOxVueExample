@@ -1,5 +1,5 @@
 // internal/model/user.go
-package model // <- Ubah package
+package model // <- Pastikan package tetap model
 
 import "time"
 
@@ -14,13 +14,15 @@ type User struct {
 
 // Input untuk registrasi
 type RegisterInput struct {
-	Username string `json:"username" binding:"required"`
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required,min=6"`
+	Username string `json:"username" validate:"required,alphanum,min=3,max=30"` // Contoh: alfanumerik, 3-30 karakter
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required,min=8,max=72"` // Contoh: minimal 8 karakter, maksimal 72 (batas bcrypt)
+	// Anda bisa menambahkan validasi password yang lebih kompleks nanti jika perlu
+	// seperti `containsany=!@#$%^&*()`, atau membuat custom validator.
 }
 
 // Input untuk login
 type LoginInput struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required"`
+	Email    string `json:"email" validate:"required,email"`
+	Password string `json:"password" validate:"required"` // Untuk login, biasanya hanya 'required' sudah cukup
 }
