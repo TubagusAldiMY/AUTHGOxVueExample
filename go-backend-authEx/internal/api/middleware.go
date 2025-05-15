@@ -13,44 +13,51 @@ import (
 	"github.com/golang-jwt/jwt/v5" // <- Pindahkan import jwt ke sini jika getUserIDFromContext membutuhkannya
 )
 
-// AuthMiddleware adalah middleware Gin untuk otentikasi JWT
+// AuthMiddleware (bagian error handlingnya)
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authorization header required"})
+			// Gunakan helper error baru
+			RespondWithError(c, NewAPIError(http.StatusUnauthorized, ErrCodeMissingAuthHeader, "Authorization header is required."))
 			return
 		}
 
 		parts := strings.Split(authHeader, " ")
 		if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Authorization header format must be Bearer {token}"})
+			// Gunakan helper error baru
+			RespondWithError(c, NewAPIError(http.StatusUnauthorized, ErrCodeInvalidAuthHeader, "Authorization header format must be Bearer {token}."))
 			return
 		}
 
 		tokenString := parts[1]
-		// Gunakan ValidateToken dari package auth
-		token, err := auth.ValidateToken(tokenString)
+		token, err := auth.ValidateToken(tokenString) // Dari internal/auth
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			// Error dari ValidateToken mungkin perlu dipetakan ke kode error kita
+			// Contoh sederhana:
+			errMsg := "Invalid or expired token."
+			errCode := ErrCodeTokenInvalid
+			if strings.Contains(err.Error(), "expired") { // Ini cara deteksi sederhana, bisa lebih baik
+				errCode = ErrCodeTokenExpired
+			}
+			RespondWithError(c, NewAPIError(http.StatusUnauthorized, errCode, errMsg))
 			return
 		}
 
 		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok || !token.Valid {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
+		if !ok || !token.Valid { // Sebenarnya !token.Valid sudah dicek oleh jwt.Parse
+			RespondWithError(c, NewAPIError(http.StatusUnauthorized, ErrCodeTokenInvalid, "Invalid token claims."))
 			return
 		}
 
-		// Ambil User ID (pastikan sub adalah float64 lalu konversi ke int)
 		userIDFloat, ok := claims["sub"].(float64)
 		if !ok {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Invalid user ID in token"})
+			RespondWithError(c, NewAPIError(http.StatusUnauthorized, ErrCodeTokenInvalid, "Invalid user ID format in token."))
 			return
 		}
 		userID := int(userIDFloat)
 
-		c.Set("userID", userID) // Set user ID di context
+		c.Set("userID", userID)
 		c.Next()
 	}
 }

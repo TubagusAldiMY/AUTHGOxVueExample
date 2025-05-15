@@ -2,7 +2,7 @@
 package api
 
 import (
-	"log" // Kita akan ganti ini dengan logger terstruktur nanti
+	"log" // Akan kita ganti dengan logger terstruktur
 	"net/http"
 
 	"go-auth-example/internal/model"
@@ -29,26 +29,31 @@ func NewAuthHandler(auth service.AuthService, user service.UserService) *AuthHan
 func (h *AuthHandler) RegisterHandler(c *gin.Context) {
 	var input model.RegisterInput
 
-	// Gunakan helper validasi baru
-	validationErrors := ValidateAndBind(c, &input)
+	validationErrors := ValidateAndBind(c, &input) // Dari Tugas 1.1
 	if validationErrors != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Validation failed", "details": validationErrors})
+		// Gunakan helper baru untuk error validasi
+		RespondWithValidationErrors(c, http.StatusBadRequest, validationErrors)
 		return
 	}
 
-	// Panggil service registrasi
 	user, err := h.authService.Register(input)
 	if err != nil {
-		// Tangani error dari service
-		if err.Error() == "email already registered" || err.Error() == "username already exists" {
-			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
-		} else {
-			log.Printf("Unhandled registration error: %v", err) // Akan diganti dengan logger terstruktur
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to register user"})
+		// Tangani error dari service dengan struktur error baru
+		// Kita akan membuat error lebih spesifik dari service nanti,
+		// untuk sekarang kita petakan berdasarkan string error.
+		switch err.Error() { // Ini masih sederhana, idealnya service mengembalikan error yang lebih terstruktur
+		case "email already registered":
+			RespondWithError(c, NewAPIError(http.StatusConflict, ErrCodeEmailTaken, "The email address is already in use."))
+		case "username already exists":
+			RespondWithError(c, NewAPIError(http.StatusConflict, ErrCodeUsernameTaken, "The username is already taken."))
+		default:
+			log.Printf("Unhandled registration error: %v", err) // Akan diganti
+			RespondWithError(c, NewAPIError(http.StatusInternalServerError, ErrCodeInternalServer, "Failed to register user. Please try again later."))
 		}
 		return
 	}
 
+	// Untuk sukses, kita bisa tetap menggunakan c.JSON atau buat helper juga
 	c.JSON(http.StatusCreated, gin.H{"message": "User registered successfully", "user": user})
 }
 
@@ -56,21 +61,20 @@ func (h *AuthHandler) RegisterHandler(c *gin.Context) {
 func (h *AuthHandler) LoginHandler(c *gin.Context) {
 	var input model.LoginInput
 
-	// Gunakan helper validasi baru
-	validationErrors := ValidateAndBind(c, &input)
+	validationErrors := ValidateAndBind(c, &input) // Dari Tugas 1.1
 	if validationErrors != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Validation failed", "details": validationErrors})
+		RespondWithValidationErrors(c, http.StatusBadRequest, validationErrors)
 		return
 	}
 
-	// Panggil service login
 	token, err := h.authService.Login(input)
 	if err != nil {
-		if err.Error() == "invalid email or password" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-		} else {
-			log.Printf("Unhandled login error: %v", err) // Akan diganti dengan logger terstruktur
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "An error occurred during login"})
+		switch err.Error() { // Sama seperti di atas, idealnya error dari service lebih terstruktur
+		case "invalid email or password":
+			RespondWithError(c, NewAPIError(http.StatusUnauthorized, ErrCodeInvalidCredentials, "Invalid email or password."))
+		default:
+			log.Printf("Unhandled login error: %v", err) // Akan diganti
+			RespondWithError(c, NewAPIError(http.StatusInternalServerError, ErrCodeInternalServer, "An error occurred during login. Please try again later."))
 		}
 		return
 	}
@@ -78,29 +82,27 @@ func (h *AuthHandler) LoginHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"token": token})
 }
 
-// ProfileHandler (tetap sama untuk saat ini)
+// ProfileHandler contoh handler untuk route yang dilindungi
 func (h *AuthHandler) ProfileHandler(c *gin.Context) {
-	userID, err := getUserIDFromContext(c) // Asumsi fungsi ini ada di middleware.go atau di-refactor
-	if err != nil {
-		log.Printf("Error getting userID from context in ProfileHandler: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not identify user"})
+	userID, errCtx := getUserIDFromContext(c)
+	if errCtx != nil {
+		log.Printf("Error getting userID from context in ProfileHandler: %v", errCtx) // Akan diganti
+		// Ini error dari middleware, jadi bisa langsung pakai error code dari middleware
+		RespondWithError(c, NewAPIError(http.StatusInternalServerError, ErrCodeInternalServer, "Could not identify user."))
 		return
 	}
 
 	user, err := h.userService.GetUserProfile(userID)
 	if err != nil {
-		if err.Error() == "user associated with token not found" {
-			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-		} else {
-			log.Printf("Unhandled profile fetch error: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch user profile"})
+		switch err.Error() { // Sama seperti di atas
+		case "user associated with token not found":
+			RespondWithError(c, NewAPIError(http.StatusNotFound, ErrCodeUserNotFound, "User profile not found."))
+		default:
+			log.Printf("Unhandled profile fetch error: %v", err) // Akan diganti
+			RespondWithError(c, NewAPIError(http.StatusInternalServerError, ErrCodeInternalServer, "Failed to fetch user profile. Please try again later."))
 		}
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Welcome to your profile!", "user": user})
 }
-
-// (Pastikan fungsi getUserIDFromContext ada dan berfungsi, biasanya dari middleware.go)
-// Jika belum ada, atau untuk sementara, Anda bisa copy dari contoh sebelumnya atau dari file yang ada.
-// func getUserIDFromContext(c *gin.Context) (int, error) { ... }
